@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trạm Cảm Xúc (v46 - Admin Intelligence)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* --- 1. CORE VARIABLES --- */
+        :root {
+            --primary: #6c5ce7;
+            --accent: #00cec9;
+            --danger: #ff7675;
+            --warning: #ffeaa7;
+            --success: #00b894;
+            --text-main: #2d3436;
+            --text-muted: #636e72;
+            --glass: rgba(255, 255, 255, 0.85);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.6);
+            --font-ui: 'Nunito', sans-serif;
+        }
+
+        * { box-sizing: border-box; user-select: none; outline: none; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; 
+            color: var(--text-main); font-family: var(--font-ui);
+            transition: background 2s ease;
+        }
+
+        /* --- EFFECTS --- */
+        .shake-screen { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-8px, 0, 0); }
+            40%, 60% { transform: translate3d(8px, 0, 0); }
+        }
+
+        #hug-overlay {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0);
+            font-size: 150px; z-index: 99999; pointer-events: none;
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-shadow: 0 10px 30px rgba(255, 107, 107, 0.5);
+        }
+        #hug-overlay.show { transform: translate(-50%, -50%) scale(1); }
+
+        /* --- BACKGROUND & CANVAS --- */
+        #render-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        #dynamic-bg { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; 
+            background: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+            transition: background 2s ease;
+        }
+
+        /* --- COMPONENT STYLES --- */
+        #desktop-pet { position: absolute; width: 60px; height: 60px; z-index: 5; cursor: pointer; transition: top 1s, left 1s; pointer-events: auto; }
+        .pet-body { font-size: 40px; animation: bounce 1s infinite alternate; }
+        .pet-bubble { position: absolute; top: -30px; left: 10px; background: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; display: none; white-space: nowrap; border: 1px solid #ccc; }
+        @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-5px); } }
+
+        .sticky-note { position: absolute; width: 200px; height: 200px; background: #fff740; box-shadow: 5px 5px 15px rgba(0,0,0,0.1); transform: rotate(-2deg); padding: 15px; font-family: 'Inter', sans-serif; z-index: 5; transition: transform 0.2s; animation: popIn 0.3s ease; }
+        .sticky-note:hover { transform: scale(1.05) rotate(0deg); z-index: 6; }
+        .sticky-header { display: flex; justify-content: space-between; margin-bottom: 5px; opacity: 0.5; cursor: grab; }
+        .sticky-body { width: 100%; height: 85%; background: transparent; border: none; resize: none; font-size: 14px; line-height: 1.4; outline: none; }
+        
+        .bottle { position: absolute; font-size: 30px; cursor: pointer; animation: floatBottle 20s linear infinite, bob 2s ease-in-out infinite alternate; z-index: 4; filter: drop-shadow(0 5px 5px rgba(0,0,0,0.2)); transition: transform 0.3s; }
+        .bottle:hover { transform: scale(1.5) rotate(10deg); }
+        @keyframes floatBottle { from { left: -50px; } to { left: 110vw; } }
+        @keyframes bob { from { margin-top: 0; } to { margin-top: 15px; } }
+
+        #focus-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; color: white; backdrop-filter: blur(5px); }
+        #focus-timer { font-size: 8rem; font-weight: 900; font-variant-numeric: tabular-nums; text-shadow: 0 0 20px rgba(255,255,255,0.5); }
+        .focus-controls button { padding: 10px 30px; font-size: 1.2rem; border-radius: 30px; border: none; background: rgba(255,255,255,0.2); color: white; cursor: pointer; margin: 10px; transition: 0.2s; border: 1px solid rgba(255,255,255,0.5); }
+        .focus-controls button:hover { background: white; color: black; }
+
+        /* --- 2. TRIAGE SCREEN --- */
+        #triage-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #e0f7fa; z-index: 9999; display: flex; justify-content: center; align-items: center; transition: opacity 0.5s; }
+        .triage-card { background: white; width: 90%; max-width: 500px; padding: 40px; border-radius: 30px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.1); }
+        .triage-options button { display: block; width: 100%; padding: 15px; margin-bottom: 10px; border: 2px solid #eee; background: white; border-radius: 15px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .triage-options button:hover { border-color: var(--primary); color: var(--primary); background: #f8f9fa; }
+
+        /* --- 3. TOPICS SCREEN --- */
+        #topics-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9000; display: none; flex-direction: column; background: rgba(240, 248, 255, 0.95); backdrop-filter: blur(10px); padding: 20px; overflow-y: auto; }
+        .topics-header { text-align: center; margin: 30px 0 50px 0; }
+        .main-logo-text { font-size: 2.8rem; font-weight: 900; background: linear-gradient(45deg, #6c5ce7, #00cec9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; letter-spacing: -1px; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+        .main-logo-text:active { transform: scale(0.95); }
+        .sub-logo-text { font-size: 1.1rem; color: #666; font-weight: 600; }
+        .topics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto; width: 100%; }
+        .topic-card { background: white; border-radius: 20px; overflow: hidden; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.05); transition: 0.3s; position: relative; height: 200px; }
+        .topic-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.15); }
+        .topic-img { width: 100%; height: 140px; object-fit: cover; }
+        .topic-info { padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .topic-title { font-weight: 800; font-size: 18px; color: var(--text-main); }
+        .topic-count { font-size: 12px; color: var(--text-muted); background: #eee; padding: 3px 8px; border-radius: 10px; }
+
+        /* --- 4. DESKTOP ENVIRONMENT --- */
+        #desktop-env { position: relative; z-index: 10; width: 100%; height: 100%; display: none; }
+        .system-bar { position: absolute; top: 0; left: 0; width: 100%; height: 50px; background: rgba(255,255,255,0.6); backdrop-filter: blur(15px); border-bottom: 1px solid rgba(255,255,255,0.5); display: flex; justify-content: space-between; align-items: center; padding: 0 25px; font-size: 14px; font-weight: 700; z-index: 5000; }
+        .sys-left { display: flex; align-items: center; gap: 15px; }
+        .app-logo { font-weight: 900; font-size: 1.2rem; color: var(--primary); cursor: pointer; display: flex; align-items: center; gap: 8px; }
+        .nav-controls { display: none; align-items: center; gap: 10px; padding-left: 15px; border-left: 2px solid rgba(0,0,0,0.1); }
+        .karma-badge { background: linear-gradient(45deg, #f1c40f, #f39c12); color:white; padding: 5px 10px; border-radius: 15px; font-size: 12px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .back-btn { width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
+        .back-btn:hover { background: var(--primary); color: white; }
+        .sys-right { display: flex; gap: 20px; align-items: center; }
+        .notif-wrapper { position: relative; cursor: pointer; }
+        .notif-icon { font-size: 20px; color: var(--text-muted); transition: 0.2s; }
+        .notif-wrapper:hover .notif-icon { color: var(--primary); transform: scale(1.1); }
+        .badge { position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; font-size: 10px; font-weight: bold; width: 16px; height: 16px; border-radius: 50%; display: none; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(255,71,87,0.4); }
+        .online-count { font-size: 12px; color: var(--success); display: flex; align-items: center; gap: 6px; background: rgba(0, 184, 148, 0.1); padding: 4px 10px; border-radius: 20px; }
+        .online-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; display: inline-block; box-shadow: 0 0 5px var(--success); }
+        .focus-btn-sys { background: rgba(0,0,0,0.05); padding: 5px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px; }
+        .focus-btn-sys:hover { background: var(--primary); color: white; }
+        .notif-dropdown { position: absolute; top: 55px; right: 20px; width: 300px; background: white; border-radius: 16px; padding: 10px; box-shadow: 0 15px 50px rgba(0,0,0,0.2); z-index: 6000; display: none; max-height: 400px; overflow-y: auto; border: 1px solid #eee; }
+        .notif-item { padding: 12px; border-bottom: 1px solid #f1f2f6; font-size: 13px; cursor: pointer; display: flex; gap: 10px; align-items: center; border-radius: 8px;}
+        .notif-item:hover { background: #f8f9fa; }
+        .notif-avatar { width: 32px; height: 32px; background: #dfe6e9; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 14px; }
+
+        /* --- 5. WINDOW SYSTEM --- */
+        .window { position: absolute; background: var(--glass); border-radius: 24px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.15); border: var(--glass-border); display: flex; flex-direction: column; backdrop-filter: blur(20px); min-width: 320px; min-height: 200px; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .win-header { height: 50px; background: rgba(255,255,255,0.4); display: flex; align-items: center; padding: 0 20px; cursor: grab; border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .win-header:active { cursor: grabbing; }
+        .win-title { flex-grow: 1; text-align: center; font-weight: 800; color: var(--text-main); }
+        .win-controls { display: flex; gap: 8px; }
+        .ctrl-btn { width: 14px; height: 14px; border-radius: 50%; border: none; cursor: pointer; }
+        .btn-close { background: #ff5f56; }
+        .win-body { flex-grow: 1; overflow-y: auto; position: relative; }
+
+        /* --- APP: CHAT --- */
+        #win-chat { width: 450px; height: 650px; top: 80px; left: 50px; }
+        .feed-container { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
+        .msg-bubble { background: white; padding: 12px 16px; border-radius: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); max-width: 85%; position: relative; animation: slideUp 0.3s ease; transition: 0.3s; border: 2px solid transparent; }
+        .msg-bubble:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        @keyframes slideUp { from{transform:translateY(10px);opacity:0} to{transform:translateY(0);opacity:1} }
+        .msg-bubble.me { align-self: flex-end; background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%); color: white; border-bottom-right-radius: 4px; }
+        .msg-bubble.other { align-self: flex-start; border-bottom-left-radius: 4px; }
+        .msg-header { font-size: 11px; margin-bottom: 5px; opacity: 0.7; display: flex; justify-content: space-between; align-items: center; }
+        .msg-content { font-size: 15px; line-height: 1.5; word-wrap: break-word; }
+        .msg-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.05); }
+        .msg-time { font-size: 10px; opacity: 0.6; font-style: italic; }
+        .msg-actions { display: flex; gap: 8px; }
+        .action-btn { font-size: 11px; cursor: pointer; padding: 3px 8px; border-radius: 10px; background: rgba(0,0,0,0.05); transition: 0.2s; font-weight: 600; }
+        .action-btn:hover { background: rgba(0,0,0,0.1); transform: translateY(-2px); }
+        .reply-btn { color: var(--primary); }
+        .report-btn { color: var(--danger); }
+        .hug-btn { color: #e84393; }
+        .highlight { animation: flash 1.5s ease-in-out infinite; border-color: var(--danger) !important; }
+        @keyframes flash { 0% { border-color: transparent; } 50% { border-color: var(--danger); } 100% { border-color: transparent; } }
+        .quote-block { font-size: 12px; color: #555; background: rgba(0,0,0,0.03); border-left: 3px solid #ccc; padding: 6px 10px; margin-bottom: 8px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .input-zone { padding: 15px; background: rgba(255,255,255,0.5); border-top: 1px solid rgba(0,0,0,0.05); position: relative; }
+        .reply-indicator { display: none; justify-content: space-between; align-items: center; background: #e8eaf6; padding: 8px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 12px; color: var(--primary); border-left: 3px solid var(--primary); }
+        .ban-overlay { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; background: rgba(220, 50, 50, 0.95); color: white; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; backdrop-filter: blur(5px); text-align: center; border-radius: 0 0 24px 24px; }
+        .mood-selector { margin-bottom: 10px; }
+        select { width: 100%; padding: 10px; border-radius: 12px; border: 1px solid #ddd; font-weight: bold; color: #555; cursor: pointer; }
+        .input-wrapper { display: flex; align-items: center; gap: 10px; }
+        textarea { width: 100%; height: 50px; border: none; border-radius: 15px; padding: 12px; font-family: inherit; resize: none; background: white; }
+        .send-btn { background: var(--primary); color: white; border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; margin-left: 10px; display: flex; justify-content: center; align-items: center; font-size: 18px; transition: 0.2s; }
+        .send-btn:hover { transform: scale(1.1) rotate(-10deg); }
+
+        /* --- MODAL --- */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 8000; display: none; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .modal-card { background: white; width: 90%; max-width: 400px; padding: 25px; border-radius: 20px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: popIn 0.3s ease; }
+        .report-textarea { width: 100%; height: 80px; margin: 15px 0; padding: 10px; font-family: inherit; border: 1px solid #ddd; border-radius: 10px; resize: none; }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }
+        .btn-cancel { background: #eee; color: #333; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; }
+        .btn-confirm { background: var(--danger); color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; }
+
+        /* --- CALM ROOM --- */
+        #win-calm { width: 600px; height: 550px; top: 80px; left: 450px; display: none; background: #2d3436; color: white; }
+        #win-calm .win-header { background: rgba(255,255,255,0.1); color: white; }
+        .calm-tabs { display: flex; gap: 10px; margin: 15px 0; padding: 0 10px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+        .calm-tabs::-webkit-scrollbar { display: none; }
+        .calm-tab { padding: 8px 16px; border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; cursor: pointer; background: transparent; color: white; transition: 0.2s; flex-shrink: 0; font-size: 13px; }
+        .calm-tab:hover { background: rgba(255,255,255,0.1); }
+        .calm-tab.active { background: white; color: #2d3436; font-weight: bold; border-color: white; }
+        .game-view { display: none; height: 350px; justify-content: center; align-items: center; position: relative; flex-direction: column; }
+        .breath-circle { width: 150px; height: 150px; background: #00cec9; border-radius: 50%; box-shadow: 0 0 50px #00cec9; animation: breathe 19s infinite; opacity: 0.6; }
+        @keyframes breathe { 0%,100%{transform:scale(1)} 21%{transform:scale(2)} 58%{transform:scale(2)} }
+        .bubble { position: absolute; width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; cursor: pointer; animation: floatUp 5s linear infinite; border: 1px solid rgba(255,255,255,0.5); display: flex; justify-content: center; align-items: center; font-size: 12px; color: white; }
+        @keyframes floatUp { from {bottom: -50px;} to {bottom: 350px;} }
+        .mo-go { width: 150px; cursor: pointer; transition: 0.1s; filter: drop-shadow(0 0 10px rgba(255,215,0,0.5)); }
+        .mo-go:active { transform: scale(0.95); }
+        .merit-text { position: absolute; font-weight: bold; color: yellow; pointer-events: none; animation: floatText 1s ease-out forwards; font-size: 20px; }
+        @keyframes floatText { from{transform:translateY(0);opacity:1} to{transform:translateY(-50px);opacity:0} }
+        .pop-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 300px; }
+        .pop-item { width: 40px; height: 40px; background: #ff7675; border-radius: 50%; cursor: pointer; box-shadow: inset 0 -3px 0 rgba(0,0,0,0.2); transition: 0.1s; }
+        .pop-item.popped { background: #55efc4; transform: scale(0.9); box-shadow: inset 0 3px 0 rgba(0,0,0,0.2); }
+        #zen-canvas { background: #fff; border-radius: 10px; cursor: crosshair; }
+        .star-sky { width: 100%; height: 100%; background: #000; position: relative; overflow: hidden; border-radius: 10px; cursor: pointer; }
+        .star { position: absolute; width: 4px; height: 4px; background: white; border-radius: 50%; animation: twinkle 1s infinite; box-shadow: 0 0 10px white; }
+        @keyframes twinkle { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .tree-container { text-align: center; cursor: pointer; }
+        .tree-img { width: 100px; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5)); }
+        .scream-meter { width: 20px; height: 200px; background: #444; border-radius: 10px; position: relative; overflow: hidden; margin-left: 20px; }
+        .scream-fill { width: 100%; height: 0%; background: linear-gradient(to top, #00b894, #ff7675); position: absolute; bottom: 0; transition: height 0.1s; }
+        .rock-target { font-size: 80px; transition: 0.1s; cursor: pointer; }
+        .broken { animation: shake 0.5s; opacity: 0.5; filter: grayscale(100%); }
+        @keyframes shake { 0% { transform: translate(1px, 1px) rotate(0deg); } 10% { transform: translate(-1px, -2px) rotate(-1deg); } 20% { transform: translate(-3px, 0px) rotate(1deg); } 30% { transform: translate(3px, 2px) rotate(0deg); } 40% { transform: translate(1px, -1px) rotate(1deg); } 50% { transform: translate(-1px, 2px) rotate(-1deg); } 60% { transform: translate(-3px, 1px) rotate(0deg); } 70% { transform: translate(3px, 1px) rotate(-1deg); } 80% { transform: translate(-1px, -1px) rotate(1deg); } 90% { transform: translate(1px, 2px) rotate(0deg); } 100% { transform: translate(1px, -2px) rotate(-1deg); } }
+
+        /* --- OTHER APPS --- */
+        #win-settings { width: 350px; height: 400px; top: 150px; left: 400px; display: none; }
+        #win-music { width: 400px; height: 300px; top: 150px; left: 200px; display: none; }
+        .music-iframe { width: 100%; height: 100%; border: none; border-radius: 0 0 24px 24px; }
+        #win-admin { width: 600px; height: 500px; top: 50px; left: 100px; display: none; }
+        .admin-form-group { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #eee; }
+        .admin-input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 10px; font-family: inherit; }
+        .upload-btn { display: inline-block; padding: 8px 15px; background: white; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .save-topic-btn { width: 100%; padding: 15px; background: var(--success); color: white; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; font-size: 16px; margin-top: 10px; box-shadow: 0 5px 15px rgba(0,184,148,0.3); transition: 0.2s; }
+        .save-topic-btn:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,184,148,0.4); }
+
+        #win-bottle { width: 300px; height: 250px; top: 200px; left: 300px; display: none; }
+        .bottle-textarea { width: 100%; height: 100px; border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 8px; font-family: inherit; resize: none; }
+
+        /* MOOD CALENDAR */
+        #win-calendar { width: 400px; height: 500px; top: 100px; left: 100px; display: none; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; padding: 10px; }
+        .cal-day { height: 40px; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.05); border-radius: 50%; font-size: 12px; position: relative; }
+        .cal-day.has-mood { background: transparent; font-size: 20px; }
+
+        /* THERAPIST BOT */
+        #win-bot { width: 350px; height: 500px; top: 100px; right: 100px; display: none; }
+        .bot-msg { background: #e0f7fa; padding: 10px; border-radius: 10px; margin-bottom: 10px; align-self: flex-start; max-width: 80%; font-size: 14px; }
+        .user-msg { background: var(--primary); color: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; align-self: flex-end; max-width: 80%; font-size: 14px; }
+
+        /* RADIO STATION */
+        #win-radio { width: 400px; height: 500px; top: 100px; left: 300px; display: none; }
+        .radio-visual { height: 150px; background: #2d3436; display:flex; justify-content:center; align-items:center; color:white; flex-direction:column; position: relative; overflow: hidden; }
+        .radio-bars { display: flex; align-items: flex-end; height: 50px; gap: 3px; }
+        .radio-bar { width: 5px; background: var(--accent); animation: radioEq 0.5s infinite alternate; }
+        @keyframes radioEq { from { height: 10px; } to { height: 40px; } }
+        .radio-status { position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: bold; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
+
+        .dock { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.4); backdrop-filter: blur(20px); padding: 10px 20px; border-radius: 24px; display: flex; gap: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); z-index: 5000; }
+        .dock-icon { width: 55px; height: 55px; background: white; border-radius: 16px; display: grid; place-items: center; font-size: 24px; cursor: pointer; transition: 0.2s; color: var(--primary); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .dock-icon:hover { transform: translateY(-15px) scale(1.1); }
+        .setting-row { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #eee; align-items: center; }
+        .report-list { padding: 10px; height: 250px; overflow-y: auto; background: #f9f9f9; border-radius: 10px; }
+        .report-item { background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid var(--danger); box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-size: 13px; }
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+        input[type="file"] { display: none; }
+        .sound-select { padding: 8px; border-radius: 8px; border: 1px solid #ddd; }
+        
+        /* --- NEW FEATURES CSS --- */
+        .msg-bubble.admin { background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%); color: #2c3e50; border: 2px solid #fff; font-weight: 600; box-shadow: 0 4px 15px rgba(241, 196, 15, 0.4); }
+        .admin-tag { background: #d35400; color: white; font-size: 9px; padding: 2px 5px; border-radius: 4px; margin-left: 5px; text-transform: uppercase; font-weight: 900; vertical-align: middle; }
+        #pinned-container { background: #fff8e1; border-bottom: 2px solid #ffe0b2; padding: 10px 15px; display: none; align-items: flex-start; gap: 10px; animation: slideDown 0.3s ease; flex-shrink: 0; }
+        @keyframes slideDown { from{transform:translateY(-100%)} to{transform:translateY(0)} }
+        .pin-icon { font-size: 20px; color: #e67e22; }
+        .pin-content { font-size: 13px; color: #5d4037; flex-grow: 1; font-weight: 600; }
+        .pin-label { font-size: 10px; color: #e67e22; text-transform: uppercase; font-weight: bold; margin-bottom: 2px; display:block;}
+        #suggestion-box { position: absolute; bottom: 100%; left: 15px; right: 15px; background: white; border-radius: 12px; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); padding: 15px; margin-bottom: 10px; border: 1px solid #6c5ce7; display: none; z-index: 100; }
+        .suggest-title { font-size: 12px; color: #6c5ce7; font-weight: bold; margin-bottom: 5px; }
+        .suggest-content { font-size: 14px; color: #333; background: #f0f3ff; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .btn-use-suggest { background: #6c5ce7; color: white; border: none; padding: 5px 15px; border-radius: 20px; font-size: 12px; cursor: pointer; }
+        .btn-close-suggest { position: absolute; top: 5px; right: 10px; cursor: pointer; color: #999; }
+
+    </style>
+</head>
+<body>
+
+    <div id="hug-overlay">❤️</div>
+
+    <div id="triage-screen">
+        <div class="triage-card">
+            <h2 style="color:var(--primary); margin-bottom:20px;">Trạm Cảm Xúc</h2>
+            <p style="color:#666; margin-bottom:30px;">Hãy dành một phút để lắng nghe bản thân (DASS-21)</p>
+            <div id="triage-question-area">
+                <h3 id="t-quest" style="margin-bottom: 20px;">Bạn có thấy khó thở hoặc tim đập nhanh không?</h3>
+                <div class="triage-options">
+                    <button onclick="Triage.answer(0)">Không hề</button>
+                    <button onclick="Triage.answer(1)">Thỉnh thoảng</button>
+                    <button onclick="Triage.answer(3)">Rất nhiều</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="topics-screen" style="display:none;">
+        <div class="topics-header">
+            <h1 class="main-logo-text" onclick="Admin.triggerLogin()">TRẠM CẢM XÚC</h1>
+            <p class="sub-logo-text">Chọn Không Gian Của Bạn</p>
+        </div>
+        <div class="topics-grid" id="topics-grid"></div>
+    </div>
+
+    <div id="dynamic-bg"></div>
+    <canvas id="render-canvas"></canvas>
+    
+    <div id="desktop-pet" onclick="Pet.interact()">
+        <div class="pet-bubble" id="pet-msg">Meow!</div>
+        <div class="pet-body" id="pet-icon">🐱</div>
+    </div>
+
+    <div id="focus-overlay">
+        <h2 style="margin-bottom:20px; opacity:0.8;">CHẾ ĐỘ TẬP TRUNG</h2>
+        <div id="focus-timer">25:00</div>
+        <div class="focus-controls">
+            <button onclick="Focus.start()">Bắt đầu</button>
+            <button onclick="Focus.stop()">Dừng lại</button>
+        </div>
+        <p style="margin-top:20px; font-size:14px; opacity:0.6;">(Các ứng dụng khác đã bị ẩn để bạn tập trung)</p>
+    </div>
+
+    <div id="report-modal" class="modal-overlay">
+        <div class="modal-card">
+            <div style="font-size: 3em; margin-bottom: 10px;">🚩</div>
+            <h3>Báo cáo vi phạm</h3>
+            <textarea id="report-reason" class="report-textarea" placeholder="Lý do..."></textarea>
+            <div class="modal-btns">
+                <button class="btn-cancel" onclick="Chat.closeReportModal()">Hủy</button>
+                <button class="btn-confirm" onclick="Chat.submitReport()">Gửi báo cáo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="desktop-env">
+        <div class="system-bar">
+            <div class="sys-left" style="display:flex;align-items:center">
+                <div class="app-logo" onclick="Admin.triggerLogin()"><i class="fa-solid fa-infinity"></i> TRẠM CẢM XÚC</div>
+                <div id="nav-controls" style="display:none; align-items:center; gap:10px; margin-left:20px; padding-left:20px; border-left:1px solid rgba(0,0,0,0.1);">
+                    <div class="back-btn" onclick="OS.goBackToTopics()" style="width:30px; height:30px; border-radius:50%; background:rgba(0,0,0,0.05); display:flex; justify-content:center; align-items:center; cursor:pointer;"><i class="fa-solid fa-arrow-left"></i></div>
+                    <span id="current-topic-name" style="font-weight:700; color:var(--text-main);"></span>
+                </div>
+            </div>
+            <div class="sys-right">
+                <div class="karma-badge" onclick="alert('Karma dùng để mua skin (sắp ra mắt)')">✨ <span id="karma-display">0</span> Karma</div>
+                <div class="focus-btn-sys" onclick="Focus.open()">
+                    <i class="fa-solid fa-stopwatch"></i> Tập trung
+                </div>
+                <div class="online-count"><div class="online-dot"></div> <span id="online-num">0</span> Online</div>
+                <div class="notif-wrapper" onclick="Notif.toggle()">
+                    <i class="fa-solid fa-bell notif-icon"></i>
+                    <div id="notif-badge" class="badge">0</div>
+                </div>
+                <div class="clock-area"><span id="date-display" style="font-size:12px; opacity:0.8">--/--</span><span id="clock-display">00:00:00</span></div>
+            </div>
+        </div>
+
+        <div id="notif-list" class="notif-dropdown">
+            <div style="text-align:center; color:#999; padding:20px;">Chưa có thông báo mới</div>
+        </div>
+
+        <div id="win-chat" class="window">
+            <div class="win-header" onmousedown="OS.drag(event, 'win-chat')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-chat')"></div></div>
+                <div class="win-title">Thảo Luận</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="display:flex; flex-direction:column; overflow:hidden;">
+                
+                <div id="pinned-container">
+                    <div class="pin-icon">📌</div>
+                    <div class="pin-content">
+                        <span class="pin-label">Tin được ghim bởi Admin</span>
+                        <span id="pinned-text">...</span>
+                    </div>
+                    <div id="unpin-btn" style="cursor:pointer; display:none" onclick="Admin.unpin()">✖</div>
+                </div>
+
+                <div id="chat-feed" class="feed-container"></div>
+                
+                <div class="input-zone" style="position:relative;">
+                    
+                    <div id="suggestion-box">
+                        <div class="btn-close-suggest" onclick="document.getElementById('suggestion-box').style.display='none'">✕</div>
+                        <div class="suggest-title">✨ Có phải bạn muốn hỏi về vấn đề này?</div>
+                        <div class="suggest-content" id="suggest-answer">...</div>
+                        <button class="btn-use-suggest" onclick="document.getElementById('suggestion-box').style.display='none'">Đúng rồi, cảm ơn (Đóng)</button>
+                    </div>
+
+                    <div id="ban-overlay" class="ban-overlay">
+                        <h3>⏳ BẠN ĐANG BỊ KHÓA CHAT</h3>
+                        <p id="ban-timer" style="font-size:24px; font-weight:bold; margin:10px 0;">00:00</p>
+                        <small>Lý do: Vi phạm ngôn từ.</small>
+                    </div>
+                    <div id="reply-indicator" class="reply-indicator">
+                        <span id="reply-text">Đang trả lời...</span>
+                        <i class="fa-solid fa-xmark" onclick="Chat.cancelReply()" style="cursor:pointer;"></i>
+                    </div>
+                    <div class="mood-selector">
+                        <select id="mood-select" onchange="Visual.changeTheme(); MoodTracker.saveToday(this.value);">
+                            <option value="bình thường">😐 Bình thường</option>
+                            <option value="vui">☀️ Vui vẻ (Nắng)</option>
+                            <option value="hào hứng">🤩 Hào hứng (Pháo giấy)</option>
+                            <option value="thoải mái">😌 Thoải mái (Bong bóng)</option>
+                            <option value="buồn">🌧️ Buồn (Mưa)</option>
+                            <option value="mệt mỏi">🌫️ Mệt mỏi (Sương mù)</option>
+                            <option value="lo lắng">😰 Lo lắng (Nhiễu)</option>
+                            <option value="nóng giận">😡 Nóng giận (Lửa)</option>
+                        </select>
+                    </div>
+                    <div class="input-wrapper">
+                        <textarea id="msg-input" placeholder="Chia sẻ..." oninput="Chat.checkSuggestion(this.value)"></textarea>
+                        <button class="send-btn" onclick="Chat.send()"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="win-calm" class="window">
+            <div class="win-header" onmousedown="OS.drag(event, 'win-calm')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-calm')"></div></div>
+                <div class="win-title">Góc Tĩnh Lặng</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="background:#2d3436; color:white; padding:20px; text-align:center;">
+                <div class="calm-tabs">
+                    <button class="calm-tab active" onclick="Calm.setMode('breath', this)">Hít thở</button>
+                    <button class="calm-tab" onclick="Calm.setMode('bubble', this)">Bong bóng</button>
+                    <button class="calm-tab" onclick="Calm.setMode('mogo', this)">Gõ Mõ</button>
+                    <button class="calm-tab" onclick="Calm.setMode('pop', this)">Bóp Xốp</button>
+                    <button class="calm-tab" onclick="Calm.setMode('scream', this)">Phòng Hét</button>
+                    <button class="calm-tab" onclick="Calm.setMode('draw', this)">Vẽ Zen</button>
+                    <button class="calm-tab" onclick="Calm.setMode('star', this)">Hái Sao</button>
+                </div>
+                <div id="view-breath" class="game-view" style="display:flex;">
+                    <div class="breath-circle"></div><h2 style="margin-top:20px;">4 - 7 - 8</h2>
+                </div>
+                <div id="view-bubble" class="game-view" style="display:none; overflow:hidden;"><p>Bấm vào bong bóng!</p></div>
+                <div id="view-mogo" class="game-view" style="display:none;">
+                    <img src="https://cdn-icons-png.flaticon.com/512/5110/5110754.png" class="mo-go" onclick="Calm.hitMogo(event)">
+                    <p style="margin-top:20px; color:#aaa;">+1 Karma mỗi lần gõ</p>
+                </div>
+                <div id="view-pop" class="game-view" style="display:none;"><div id="pop-grid" class="pop-grid"></div></div>
+                <div id="view-draw" class="game-view" style="display:none;">
+                    <canvas id="zen-canvas" width="300" height="300"></canvas>
+                    <button onclick="Calm.clearCanvas()" style="margin-top:10px;">Xóa bảng</button>
+                </div>
+                <div id="view-star" class="game-view" style="display:none;">
+                    <div class="star-sky" onclick="Calm.createStar(event)"></div>
+                    <p style="position:absolute; bottom:10px; opacity:0.5;">+1 Karma khi hái sao</p>
+                </div>
+                <div id="view-scream" class="game-view" style="display:none; flex-direction:row;">
+                    <div style="text-align:center">
+                        <div id="rock-target" class="rock-target">🪨</div>
+                        <p style="margin-top:10px">Hét to để phá đá!</p>
+                        <button onclick="Scream.start()" style="margin-top:10px; padding:5px 10px;">Bật Mic</button>
+                    </div>
+                    <div class="scream-meter"><div id="scream-fill" class="scream-fill"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="win-radio" class="window">
+            <div class="win-header" onmousedown="OS.drag(event, 'win-radio')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-radio')"></div></div>
+                <div class="win-title">Radio Trạm (LIVE)</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="background:#111; color:white; display:flex; flex-direction:column;">
+                <div class="radio-visual">
+                    <div class="radio-status">LIVE</div>
+                    <div style="margin-bottom:10px; font-weight:bold;">Đang phát sóng...</div>
+                    <div class="radio-bars">
+                        <div class="radio-bar" style="animation-delay:0s"></div>
+                        <div class="radio-bar" style="animation-delay:0.1s"></div>
+                        <div class="radio-bar" style="animation-delay:0.2s"></div>
+                        <div class="radio-bar" style="animation-delay:0.3s"></div>
+                        <div class="radio-bar" style="animation-delay:0.4s"></div>
+                    </div>
+                    <div id="radio-player-container" style="position:absolute; top:-9999px; left:-9999px;"></div>
+                </div>
+                <div id="radio-chat" style="flex-grow:1; background:#222; overflow-y:auto; padding:10px; font-size:13px;">
+                    <div style="color:#666; text-align:center;">Chào mừng đến với Radio Trạm!</div>
+                </div>
+                <div style="padding:10px; display:flex;">
+                    <input type="text" id="radio-input" placeholder="Gửi lời nhắn..." style="flex-grow:1; padding:8px; border-radius:5px; border:none;">
+                </div>
+            </div>
+        </div>
+
+        <div id="win-calendar" class="window">
+            <div class="win-header" onmousedown="OS.drag(event, 'win-calendar')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-calendar')"></div></div>
+                <div class="win-title">Nhật Ký Cảm Xúc</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="padding:20px;">
+                <h3 style="text-align:center; margin-bottom:15px;">Tháng này của bạn</h3>
+                <div id="calendar-grid" class="calendar-grid"></div>
+                <p style="font-size:12px; color:#666; margin-top:20px; text-align:center;">Hệ thống tự lưu cảm xúc khi bạn chọn ở khung chat.</p>
+            </div>
+        </div>
+
+        <div id="win-bot" class="window">
+            <div class="win-header" onmousedown="OS.drag(event, 'win-bot')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-bot')"></div></div>
+                <div class="win-title">Dr. Sẻ Chia</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="padding:10px; display:flex; flex-direction:column;">
+                <div id="bot-chat-content" style="flex-grow:1; overflow-y:auto; padding:10px; margin-bottom:10px; background:#f5f5f5; border-radius:10px;">
+                    <div class="bot-msg">Chào bạn, hôm nay bạn cảm thấy thế nào? Tôi ở đây để lắng nghe.</div>
+                </div>
+                <div style="display:flex; gap:5px;">
+                    <input type="text" id="bot-input" style="flex-grow:1; padding:10px; border-radius:10px; border:1px solid #ccc;" placeholder="Nói gì đó...">
+                    <button onclick="Bot.send()" style="padding:10px; border-radius:10px; border:none; background:var(--primary); color:white;">Gửi</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="win-music" class="window">
+            <div class="win-header" onmousedown="OS.drag(event, 'win-music')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-music')"></div></div>
+                <div class="win-title">Máy Nghe Nhạc</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="background:#111; color: white;">
+                <div style="padding:15px; display:flex; justify-content:center; gap:15px; background:#222; border-bottom:1px solid #333;">
+                    <label style="padding:8px 15px; border-radius:12px; background:#6c5ce7; cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:5px;">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Tải nhạc lên
+                        <input type="file" id="local-music-upload" accept="audio/*" onchange="MusicApp.handleUpload(this)">
+                    </label>
+                    <button style="padding:8px 15px; border-radius:12px; background:#1db954; color:white; border:none; cursor:pointer; font-weight:bold;" onclick="MusicApp.switchMode('spotify')">
+                        <i class="fa-brands fa-spotify"></i> Spotify
+                    </button>
+                </div>
+                <div id="view-local-music" style="padding: 30px 20px; text-align: center; display: block;">
+                    <div style="font-size:50px; margin-bottom:20px;">🎧</div>
+                    <h4 id="current-song-name" style="margin-bottom:20px; color:#ddd;">Chưa chọn bài hát nào</h4>
+                    <audio id="local-audio-player" controls style="width: 100%; border-radius:10px;"></audio>
+                </div>
+                <iframe id="music-iframe" style="display:none; width:100%; height:100%; border:none;" src="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>
+            </div>
+        </div>
+
+        <div id="win-admin" class="window">
+            <div class="win-header" style="background:#d63031; color:white;" onmousedown="OS.drag(event, 'win-admin')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-admin')"></div></div>
+                <div class="win-title">Admin Dashboard</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="padding:20px;">
+                <h3 style="margin-bottom:15px;">Quản lý Chủ đề</h3>
+                <div class="admin-form-group">
+                    <input type="text" id="new-topic-name" class="admin-input" placeholder="Tên chủ đề mới...">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label class="upload-btn">
+                            📷 Chọn ảnh bìa
+                            <input type="file" id="new-topic-img" accept="image/*" onchange="Admin.handleImage(this)">
+                        </label>
+                        <span id="img-status" style="font-size:12px; color:green; display:none;">✅ Đã chọn ảnh</span>
+                    </div>
+                </div>
+                <button class="save-topic-btn" onclick="Admin.addTopic()">💾 LƯU CHỦ ĐỀ</button>
+                
+                <hr style="margin: 20px 0;">
+                <h3>Phát Radio</h3>
+                <div class="admin-form-group">
+                    <input type="text" id="radio-link" class="admin-input" placeholder="Link YouTube...">
+                    <button onclick="Admin.startRadio()" style="width:100%; padding:10px; background:#e17055; color:white; border:none; border-radius:8px; cursor:pointer;">📡 Bắt đầu phát sóng</button>
+                </div>
+
+                <hr style="margin: 20px 0;">
+                <h3>Báo cáo vi phạm</h3>
+                <div id="report-list" class="report-list">Loading...</div>
+                <hr style="margin: 20px 0;">
+                <button onclick="Admin.resetMyBan()" style="width:100%; padding:10px; background:#6c5ce7; color:white; border:none; border-radius:8px;">Gỡ khóa cho tôi (Test)</button>
+            </div>
+        </div>
+        
+        <div id="win-bottle" class="window">
+             <div class="win-header" onmousedown="OS.drag(event, 'win-bottle')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-bottle')"></div></div>
+                <div class="win-title">Thả Trôi Nỗi Buồn</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="padding:20px; text-align:center;">
+                <p>Viết những điều phiền muộn vào đây và thả nó đi...</p>
+                <textarea id="bottle-msg" class="bottle-textarea" placeholder="Hôm nay tôi thấy..."></textarea>
+                <button onclick="Social.throwBottle()" style="width:100%; padding:10px; background:#0984e3; color:white; border:none; border-radius:10px; cursor:pointer;">🌊 Thả chai</button>
+            </div>
+        </div>
+
+        <div id="win-settings" class="window">
+            <div class="win-header" onmousedown="OS.drag(event, 'win-settings')">
+                <div class="win-controls"><div class="ctrl-btn btn-close" onclick="OS.close('win-settings')"></div></div>
+                <div class="win-title">Cài Đặt</div>
+                <div></div>
+            </div>
+            <div class="win-body" style="padding:20px;">
+                <div class="setting-row">
+                    <span>Âm thanh tương tác</span>
+                    <select id="sound-type" class="sound-select" onchange="Sound.set(this.value)">
+                        <option value="water">💧 Giọt nước</option>
+                        <option value="wood">🪵 Gõ gỗ</option>
+                        <option value="keyboard">⌨️ Bàn phím</option>
+                        <option value="none">🔇 Tắt</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="dock">
+            <div class="dock-icon" onclick="OS.open('win-chat')" title="Cộng đồng"><i class="fa-solid fa-comments"></i></div>
+            <div class="dock-icon" onclick="OS.open('win-calm')" title="Góc Tĩnh Lặng"><i class="fa-solid fa-spa"></i></div>
+            <div class="dock-icon" onclick="OS.open('win-bot')" title="Dr. Sẻ Chia"><i class="fa-solid fa-user-doctor"></i></div>
+            <div class="dock-icon" onclick="OS.open('win-calendar')" title="Nhật Ký Cảm Xúc"><i class="fa-solid fa-calendar-days"></i></div>
+            <div class="dock-icon" onclick="OS.open('win-music')" title="Nghe Nhạc"><i class="fa-solid fa-music"></i></div>
+            <div class="dock-icon" onclick="OS.open('win-bottle')" title="Thả chai"><i class="fa-solid fa-bottle-water"></i></div>
+            <div class="dock-icon" onclick="Sticky.create()" title="Ghi chú"><i class="fa-solid fa-note-sticky"></i></div>
+            <div class="dock-icon" onclick="OS.open('win-settings')" title="Cài đặt"><i class="fa-solid fa-gear"></i></div>
+        </div>
+    </div>
+
+    <audio id="sfx-water" src="https://assets.mixkit.co/active_storage/sfx/2048/2048-preview.mp3"></audio>
+    <audio id="sfx-wood" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
+    <audio id="sfx-key" src="https://assets.mixkit.co/active_storage/sfx/2361/2361-preview.mp3"></audio>
+    <audio id="sfx-mogo" src="https://assets.mixkit.co/active_storage/sfx/243/243-preview.mp3"></audio>
+    <audio id="sfx-pop" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, onChildRemoved, remove, limitToLast, query, serverTimestamp, set, onValue } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-database.js";
+
+        const app = initializeApp({
+            apiKey: "AIzaSyD4mQZ4ZSj3Bf5ih0sMUXS0uSJWbcMXNUs",
+            authDomain: "tramcamxuc-6559a.firebaseapp.com",
+            databaseURL: "https://tramcamxuc-6559a-default-rtdb.firebaseio.com",
+            projectId: "tramcamxuc-6559a",
+            storageBucket: "tramcamxuc-6559a.firebasestorage.app",
+            messagingSenderId: "937856190126",
+            appId: "1:937856190126:web:45570b64759621ce12cf3f"
+        });
+        const db = getDatabase(app);
+        const postsRef = ref(db, 'posts');
+        const topicsRef = ref(db, 'topics');
+        const reportsRef = ref(db, 'reports');
+        const bottlesRef = ref(db, 'bottles');
+        const radioRef = ref(db, 'radio');
+        const hugsRef = ref(db, 'hugs');
+        const pinnedRef = ref(db, 'pinned');
+        const kbRef = ref(db, 'knowledge_base');
+
+        const myID = localStorage.getItem('user_id') || 'User_'+Math.floor(Math.random()*9999);
+        localStorage.setItem('user_id', myID);
+
+        let currentTopic = 'general'; 
+        let currentReply = null; 
+        let tempReportKey = null;
+        let currentListener = null;
+
+        // --- NEW: KNOWLEDGE BASE SYSTEM ---
+        window.KnowledgeBase = {
+            data: [],
+            init() {
+                onValue(kbRef, (snap) => {
+                    this.data = [];
+                    snap.forEach(child => {
+                        this.data.push(child.val());
+                    });
+                });
+            },
+            findMatch(inputText) {
+                if(!inputText || inputText.length < 5) return null;
+                const text = inputText.toLowerCase();
+                const match = this.data.find(item => text.includes(item.question) || item.question.includes(text));
+                return match ? match.answer : null;
+            }
+        };
+        KnowledgeBase.init();
+
+        // --- NEW: RADIO MODULE ---
+        let radioPlayer;
+        window.onYouTubeIframeAPIReady = function() {
+            radioPlayer = new YT.Player('radio-player-container', {
+                height: '0', width: '0', videoId: '',
+                playerVars: { 'autoplay': 1, 'controls': 0 },
+                events: { 'onReady': onPlayerReady }
+            });
+        };
+        function onPlayerReady(event) { event.target.playVideo(); }
+
+        window.Radio = {
+            init() {
+                onChildAdded(radioRef, (snap) => this.handleUpdate(snap.val())); 
+            },
+            handleUpdate(data) {
+                if(data && data.status === 'live') {
+                    OS.open('win-radio');
+                    if(radioPlayer && radioPlayer.loadVideoById) {
+                        const secondsPassed = (Date.now() - data.startTime) / 1000;
+                        radioPlayer.loadVideoById(data.videoId, secondsPassed);
+                    }
+                }
+            }
+        }; 
+        setInterval(() => {}, 5000);
+
+        // --- NEW: SOCIAL HUGS ---
+        window.Social = {
+            throwBottle() {
+                const msg = document.getElementById('bottle-msg').value;
+                if(!msg) return alert("Viết gì đó đi bạn ơi!");
+                push(bottlesRef, { msg: msg, user: myID, time: serverTimestamp() });
+                alert("Đã thả chai ra biển! 🌊");
+                document.getElementById('bottle-msg').value = '';
+                OS.close('win-bottle');
+            },
+            sendHug(targetId) {
+                if(targetId === myID) return alert("Bạn không thể tự ôm chính mình (nhưng hãy yêu bản thân nhé!)");
+                push(hugsRef, { from: myID, to: targetId, time: serverTimestamp() });
+                alert("Đã gửi cái ôm ấm áp! 🤗");
+            },
+            listenHugs() {
+                onChildAdded(hugsRef, (snap) => {
+                    const data = snap.val();
+                    if(data.to === myID && (Date.now() - data.time < 10000)) { 
+                        this.receiveHug();
+                    }
+                });
+            },
+            receiveHug() {
+                Sound.play('pop');
+                document.body.classList.add('shake-screen');
+                const overlay = document.getElementById('hug-overlay');
+                overlay.classList.add('show');
+                setTimeout(() => {
+                    document.body.classList.remove('shake-screen');
+                    overlay.classList.remove('show');
+                }, 2000);
+            }
+        };
+        Social.listenHugs();
+
+        // --- EXISTING MODULES ---
+        window.Pet = {
+            el: document.getElementById('desktop-pet'),
+            msg: document.getElementById('pet-msg'),
+            x: 100, y: 100,
+            init() { setInterval(() => this.move(), 5000); },
+            move() { this.x = Math.random() * (window.innerWidth - 60); this.y = Math.random() * (window.innerHeight - 60); this.el.style.left = this.x + 'px'; this.el.style.top = this.y + 'px'; },
+            interact() { this.msg.style.display = 'block'; this.msg.innerText = ['Meow~', 'Yêu bạn ❤️', 'Đói quá 🐟', 'Zzz...'][Math.floor(Math.random()*4)]; setTimeout(() => this.msg.style.display='none', 2000); },
+            updateMood(mood) { const icon = document.getElementById('pet-icon'); if(mood === 'buồn') icon.innerText = '😿'; else if(mood === 'vui') icon.innerText = '😺'; else icon.innerText = '🐱'; }
+        }; Pet.init();
+
+        window.Karma = {
+            val: parseInt(localStorage.getItem('my_karma') || '0'),
+            update(amount) { this.val += amount; localStorage.setItem('my_karma', this.val); document.getElementById('karma-display').innerText = this.val; },
+            init() { document.getElementById('karma-display').innerText = this.val; }
+        }; Karma.init();
+
+        window.MoodTracker = {
+            saveToday(mood) { const date = new Date().toDateString(); let history = JSON.parse(localStorage.getItem('mood_history') || '{}'); history[date] = mood; localStorage.setItem('mood_history', JSON.stringify(history)); this.render(); Pet.updateMood(mood); },
+            render() {
+                const g = document.getElementById('calendar-grid'); g.innerHTML = '';
+                const history = JSON.parse(localStorage.getItem('mood_history') || '{}');
+                const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
+                for(let i=1; i<=daysInMonth; i++) {
+                    const d = new Date(); d.setDate(i); const k = d.toDateString(); const div = document.createElement('div'); div.className = 'cal-day'; div.innerText = i;
+                    if(history[k]) { div.classList.add('has-mood'); div.innerText = ''; if(history[k].includes('vui')) div.innerText = '☀️'; else if(history[k].includes('buồn')) div.innerText = '🌧️'; else if(history[k].includes('giận')) div.innerText = '😡'; else div.innerText = '😐'; }
+                    g.appendChild(div);
+                }
+            }
+        }; MoodTracker.render();
+
+        window.Scream = {
+            audioCtx: null, analyser: null, source: null,
+            async start() { try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); this.audioCtx = new (window.AudioContext || window.webkitAudioContext)(); this.analyser = this.audioCtx.createAnalyser(); this.source = this.audioCtx.createMediaStreamSource(stream); this.source.connect(this.analyser); this.loop(); } catch(e) { alert("Cần cấp quyền Micro để hét!"); } },
+            loop() {
+                const data = new Uint8Array(this.analyser.frequencyBinCount); this.analyser.getByteFrequencyData(data); let sum = 0; for(let i=0; i<data.length; i++) sum+=data[i]; const vol = sum / data.length;
+                const fill = document.getElementById('scream-fill'); const rock = document.getElementById('rock-target');
+                fill.style.height = (vol * 2) + '%'; if(vol > 50) { rock.innerText = '💥'; rock.classList.add('broken'); setTimeout(() => { rock.innerText = '🪨'; rock.classList.remove('broken'); }, 1000); }
+                requestAnimationFrame(()=>this.loop());
+            }
+        };
+
+        window.Bot = {
+            rules: [ {k:['buồn','khóc','chán'], r:['Không sao đâu, khóc một chút sẽ nhẹ lòng hơn.', 'Hãy nghe một bài nhạc và thư giãn nhé.', 'Mình luôn ở đây lắng nghe bạn.']}, {k:['vui','hạnh phúc'], r:['Tuyệt vời! Hãy giữ năng lượng này nhé.', 'Chia sẻ niềm vui đó với mọi người đi nào!']}, {k:['giận','bực'], r:['Hít thở sâu nào... 1... 2... 3...', 'Đừng để cơn giận làm chủ bạn.']} ],
+            send() {
+                const inp = document.getElementById('bot-input'); const txt = inp.value.toLowerCase(); if(!txt) return;
+                this.addMsg(inp.value, 'user-msg'); inp.value = '';
+                setTimeout(() => { let reply = "Mình chưa hiểu lắm, nhưng mình luôn ủng hộ bạn."; for(let rule of this.rules) { for(let k of rule.k) { if(txt.includes(k)) { reply = rule.r[Math.floor(Math.random()*rule.r.length)]; break; } } } this.addMsg(reply, 'bot-msg'); }, 1000);
+            },
+            addMsg(txt, cls) { const c = document.getElementById('bot-chat-content'); const d = document.createElement('div'); d.className = cls; d.innerText = txt; c.appendChild(d); c.scrollTop = c.scrollHeight; }
+        };
+
+        window.Sound = {
+            type: 'water',
+            set(type) { this.type = type; },
+            play(forceType) { if(this.type === 'none' && !forceType) return; const t = forceType || this.type; let el = document.getElementById('sfx-water'); if(t === 'wood') el = document.getElementById('sfx-wood'); if(t === 'keyboard') el = document.getElementById('sfx-key'); if(t === 'mogo') el = document.getElementById('sfx-mogo'); if(t === 'pop') el = document.getElementById('sfx-pop'); if(el) { el.currentTime = 0; el.volume = 0.3; el.play().catch(()=>{}); } }
+        };
+        document.addEventListener('click', (e) => { if(!e.target.closest('.mo-go') && !e.target.closest('.pop-item')) Sound.play(); });
+
+        function timeAgo(ts) { if(!ts) return 'Vừa xong'; const min = Math.floor((Date.now()-ts)/60000); if(min<1) return 'Vừa xong'; if(min<60) return `${min} phút trước`; return new Date(ts).toLocaleDateString('vi-VN'); }
+        function setRealtimeBG() { const h = new Date().getHours(); const bg = document.getElementById('dynamic-bg'); if(h >= 6 && h < 17) bg.style.background = 'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)'; else if(h >= 17 && h < 19) bg.style.background = 'linear-gradient(120deg, #f6d365 0%, #fda085 100%)'; else bg.style.background = 'linear-gradient(to bottom, #0f2027, #203a43, #2c5364)'; }
+
+        let focusInterval;
+        window.Focus = {
+            timeLeft: 25 * 60,
+            open() { document.getElementById('focus-overlay').style.display = 'flex'; },
+            start() { clearInterval(focusInterval); focusInterval = setInterval(() => { this.timeLeft--; const m = Math.floor(this.timeLeft / 60); const s = this.timeLeft % 60; document.getElementById('focus-timer').innerText = `${m}:${s < 10 ? '0'+s : s}`; if(this.timeLeft <= 0) { clearInterval(focusInterval); alert("Hết giờ tập trung! Nghỉ ngơi nào."); this.stop(); } }, 1000); },
+            stop() { clearInterval(focusInterval); document.getElementById('focus-overlay').style.display = 'none'; this.timeLeft = 25 * 60; document.getElementById('focus-timer').innerText = "25:00"; }
+        };
+
+        window.Sticky = {
+            create(text = '', x = 100, y = 100) { const note = document.createElement('div'); note.className = 'sticky-note'; note.style.left = x + 'px'; note.style.top = y + 'px'; note.innerHTML = `<div class="sticky-header" onmousedown="Sticky.drag(event, this.parentNode)"><span>📌 Note</span><span style="cursor:pointer" onclick="this.parentNode.parentNode.remove(); Sticky.save()">x</span></div><textarea class="sticky-body" oninput="Sticky.save()">${text}</textarea>`; document.getElementById('desktop-env').appendChild(note); this.save(); },
+            drag(e, el) { let shiftX = e.clientX - el.getBoundingClientRect().left; let shiftY = e.clientY - el.getBoundingClientRect().top; const move = (ev) => { el.style.left = ev.pageX - shiftX + 'px'; el.style.top = ev.pageY - shiftY + 'px'; }; document.addEventListener('mousemove', move); document.onmouseup = () => { document.removeEventListener('mousemove', move); this.save(); }; },
+            save() { const notes = []; document.querySelectorAll('.sticky-note').forEach(n => { notes.push({ text: n.querySelector('textarea').value, x: n.offsetLeft, y: n.offsetTop }); }); localStorage.setItem('my_notes', JSON.stringify(notes)); },
+            load() { const notes = JSON.parse(localStorage.getItem('my_notes')) || []; notes.forEach(n => this.create(n.text, n.x, n.y)); }
+        };
+
+        window.Topics = {
+            init() { onChildAdded(topicsRef, (snap) => { const t=snap.val(); t.id=snap.key; this.renderCard(t); }); setTimeout(() => { if(document.getElementById('topics-grid').children.length===0) { this.addDefault('Góc Học Tập', 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=500&q=60'); this.addDefault('Chuyện Tình Yêu', 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=500&q=60'); } }, 2000); },
+            addDefault(name, img) { push(topicsRef, { name, img, created: Date.now() }); },
+            renderCard(t) { const grid = document.getElementById('topics-grid'); const card = document.createElement('div'); card.className = 'topic-card'; card.innerHTML = `<img src="${t.img}" class="topic-img"><div class="topic-info"><div class="topic-title">${t.name}</div><div class="topic-count">Vào ngay →</div></div>`; card.onclick = () => this.select(t.id, t.name); grid.appendChild(card); },
+            
+            select(id, name) { 
+                currentTopic = id; 
+                document.getElementById('current-topic-name').innerText = name; 
+                document.getElementById('topics-screen').style.display = 'none'; 
+                document.getElementById('desktop-env').style.display = 'block'; 
+                document.getElementById('nav-controls').style.display = 'flex'; 
+                OS.open('win-chat'); 
+                
+                this.loadTopicChat(id);
+                Sticky.load(); 
+                MoodTracker.render(); 
+            },
+            loadTopicChat(topicId) {
+                if (currentListener) {
+                    document.getElementById('chat-feed').innerHTML = ''; 
+                } else {
+                    document.getElementById('chat-feed').innerHTML = '';
+                }
+
+                // LISTEN FOR PINS
+                onValue(ref(db, `pinned/${topicId}`), (snap) => {
+                    const pinData = snap.val();
+                    const pinContainer = document.getElementById('pinned-container');
+                    if(pinData) {
+                        pinContainer.style.display = 'flex';
+                        document.getElementById('pinned-text').innerText = pinData.content;
+                    } else {
+                        pinContainer.style.display = 'none';
+                    }
+                });
+
+                const q = query(ref(db, `posts/${topicId}`), limitToLast(50));
+                
+                currentListener = onChildAdded(q, (snap) => {
+                    const data = snap.val();
+                    const isMe = data.user_id === myID;
+                    const isReplyToMe = data.replyTo && data.replyTo.id === myID;
+                    if(isReplyToMe && !isMe) Notif.add(data, snap.key);
+
+                    // ADMIN CHECK
+                    const isAdminMsg = data.isAdmin ? 'admin' : ''; 
+                    const adminTag = data.isAdmin ? '<span class="admin-tag">ADMIN</span>' : '';
+
+                    const div = document.createElement('div');
+                    div.id = snap.key; div.className = `msg-bubble ${isMe?'me':'other'} ${isAdminMsg}`;
+                    
+                    let replyHTML = '';
+                    if(data.replyTo) replyHTML = `<div class="quote-block">↪ Trả lời #${data.replyTo.id}: "${data.replyTo.content.substring(0,20)}..."</div>`;
+                    
+                    let mIcon = '';
+                    if(data.mood === 'vui') mIcon='☀️'; else if(data.mood === 'buồn') mIcon='🌧️';
+                    else if(data.mood === 'nóng giận') mIcon='😡'; else if(data.mood === 'hào hứng') mIcon='🤩';
+                    else if(data.mood === 'lo lắng') mIcon='😰'; else if(data.mood === 'mệt mỏi') mIcon='🌫️';
+                    else if(data.mood === 'thoải mái') mIcon='😌';
+                    
+                    // ADMIN CONTROLS
+                    const adminControls = window.Admin.isAdmin ? `
+                        <span class="action-btn" onclick="Admin.pinMessage('${data.content.replace(/'/g, "\\'")}')">📌 Ghim</span>
+                        <span class="action-btn" onclick="Admin.saveSample('${data.content.replace(/'/g, "\\'")}')">💾 Lưu mẫu</span>
+                    ` : '';
+
+                    div.innerHTML = `
+                        <div class="msg-header"><span>#${data.user_id} ${adminTag} ${mIcon}</span><span>${timeAgo(data.timestamp)}</span></div>
+                        ${replyHTML}
+                        <div class="msg-content">${data.content}</div>
+                        <div class="msg-footer">
+                            <div class="msg-actions">
+                                <span class="action-btn reply-btn" onclick="Chat.setReply('${data.user_id}', '${data.content.replace(/"/g,'"')}')">↩ Trả lời</span>
+                                ${!isMe ? `<span class="action-btn hug-btn" onclick="Social.sendHug('${data.user_id}')">🤗 Ôm</span>
+                                           <span class="action-btn report-btn" onclick="Chat.openReportModal('${snap.key}')">🚩 Báo cáo</span>` : ''}
+                                ${adminControls}
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('chat-feed').prepend(div);
+                });
+            }
+        };
+
+        window.Triage = {
+            score: 0, currentQ: 0, qs: ["Tim bạn có đập nhanh không?", "Bạn có thấy tuyệt vọng không?", "Bạn có muốn đập phá không?"],
+            answer(val) { this.score += val; this.currentQ++; if(this.currentQ < this.qs.length) { document.getElementById('t-quest').innerText = this.qs[this.currentQ]; } else { document.getElementById('triage-screen').style.opacity = 0; setTimeout(() => { document.getElementById('triage-screen').style.display='none'; if(this.score >= 6) { document.getElementById('desktop-env').style.display='block'; OS.open('win-calm'); alert("Hệ thống nhận thấy bạn đang rất căng thẳng. Hãy ghé thăm Góc Tĩnh Lặng nhé."); } else { document.getElementById('topics-screen').style.display='flex'; } }, 500); } }
+        };
+
+        window.Visual = {
+            canvas: document.getElementById('render-canvas'), ctx: document.getElementById('render-canvas').getContext('2d'), bg: document.getElementById('dynamic-bg'), particles: [], animationId: null, width: window.innerWidth, height: window.innerHeight, moodType: 'normal',
+            init() { this.resize(); window.addEventListener('resize', () => this.resize()); },
+            resize() { this.width = window.innerWidth; this.height = window.innerHeight; this.canvas.width = this.width; this.canvas.height = this.height; },
+            changeTheme() {
+                const mood = document.getElementById('mood-select').value; this.moodType = mood; this.particles = []; if (this.animationId) cancelAnimationFrame(this.animationId); this.ctx.clearRect(0, 0, this.width, this.height); this.ctx.globalCompositeOperation = 'source-over'; 
+                switch(mood) { case 'buồn': this.bg.style.background = 'linear-gradient(to bottom, #1e272e, #3a4b5c)'; this.initRain(); break; case 'nóng giận': this.bg.style.background = 'linear-gradient(to top, #4a0000, #cd212a)'; this.initFire(); break; case 'vui': this.bg.style.background = 'linear-gradient(120deg, #f6d365 0%, #fda085 100%)'; this.initSun(); break; case 'hào hứng': this.bg.style.background = 'linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%)'; this.initConfetti(); break; case 'thoải mái': this.bg.style.background = 'linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)'; this.initBubbles(); break; case 'mệt mỏi': this.bg.style.background = 'linear-gradient(to bottom, #536976, #292E49)'; this.initFog(); break; case 'lo lắng': this.bg.style.background = '#000'; this.initNoise(); break; default: this.bg.style.background = 'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)'; break; }
+            },
+            initRain() { for(let i=0; i<150; i++) this.particles.push({x:Math.random()*this.width, y:Math.random()*this.height, l:Math.random()*20+10, v:Math.random()*10+10, o:Math.random()*0.5+0.1}); const animate = () => { this.ctx.clearRect(0,0,this.width,this.height); this.ctx.strokeStyle = 'rgba(174, 194, 224, 0.5)'; this.ctx.lineWidth=1; this.ctx.beginPath(); this.particles.forEach(p => { this.ctx.moveTo(p.x,p.y); this.ctx.lineTo(p.x,p.y+p.l); p.y+=p.v; if(p.y>this.height){p.y=-20;p.x=Math.random()*this.width;} }); this.ctx.stroke(); this.animationId=requestAnimationFrame(animate); }; animate(); },
+            initFire() { this.ctx.globalCompositeOperation = 'lighter'; for(let i=0; i<100; i++) this.particles.push({x:Math.random()*this.width, y:this.height+Math.random()*100, size:Math.random()*10+2, speed:Math.random()*3+1, life:Math.random()}); const animate = () => { this.ctx.clearRect(0,0,this.width,this.height); this.particles.forEach(p => { this.ctx.beginPath(); const g=this.ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size); g.addColorStop(0,`rgba(255,200,50,${p.life})`); g.addColorStop(1,`rgba(255,50,0,0)`); this.ctx.fillStyle=g; this.ctx.arc(p.x,p.y,p.size,0,Math.PI*2); this.ctx.fill(); p.y-=p.speed; p.x+=Math.sin(p.y*0.05)*0.5; p.life-=0.01; if(p.life<=0||p.y<-50){p.y=this.height+20;p.life=1;p.x=Math.random()*this.width;} }); this.animationId=requestAnimationFrame(animate); }; animate(); },
+            initConfetti() { const c=['#a864fd','#29cdff','#78ff44','#ff718d','#fdff6a']; for(let i=0; i<80; i++) this.particles.push({x:Math.random()*this.width, y:Math.random()*this.height-this.height, c:c[Math.floor(Math.random()*c.length)], t:Math.random()*10-10, ta:0, s:Math.random()*10+5}); const animate = () => { this.ctx.clearRect(0,0,this.width,this.height); this.particles.forEach(p => { this.ctx.beginPath(); this.ctx.lineWidth=p.s; this.ctx.strokeStyle=p.c; p.ta+=0.1; p.y+=(Math.cos(p.ta)+1+p.s/5)/2; p.x+=Math.sin(p.ta)*2; this.ctx.moveTo(p.x+p.t+(p.s/2),p.y); this.ctx.lineTo(p.x+p.t,p.y+p.t+(p.s/2)); this.ctx.stroke(); if(p.y>this.height){p.y=-20;p.x=Math.random()*this.width;} }); this.animationId=requestAnimationFrame(animate); }; animate(); },
+            initBubbles() { for(let i=0; i<30; i++) this.particles.push({x:Math.random()*this.width, y:this.height+Math.random()*200, r:Math.random()*15+5, s:Math.random()*1+0.5, o:Math.random()*100}); const animate = () => { this.ctx.clearRect(0,0,this.width,this.height); this.ctx.strokeStyle='rgba(255,255,255,0.6)'; this.ctx.fillStyle='rgba(255,255,255,0.1)'; this.ctx.lineWidth=2; this.particles.forEach(p => { this.ctx.beginPath(); p.y-=p.s; let xo=Math.sin(p.y*0.01+p.o)*20; this.ctx.arc(p.x+xo,p.y,p.r,0,Math.PI*2); this.ctx.stroke(); this.ctx.fill(); if(p.y<-50){p.y=this.height+50;p.x=Math.random()*this.width;} }); this.animationId=requestAnimationFrame(animate); }; animate(); },
+            initFog() { for(let i=0; i<10; i++) this.particles.push({x:Math.random()*this.width, y:Math.random()*this.height, r:Math.random()*200+100, s:Math.random()*0.5+0.2}); const animate = () => { this.ctx.clearRect(0,0,this.width,this.height); this.particles.forEach(p => { this.ctx.beginPath(); let g=this.ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r); g.addColorStop(0,'rgba(255,255,255,0.15)'); g.addColorStop(1,'rgba(255,255,255,0)'); this.ctx.fillStyle=g; this.ctx.arc(p.x,p.y,p.r,0,Math.PI*2); this.ctx.fill(); p.x+=p.s; if(p.x>this.width+p.r) p.x=-p.r; }); this.animationId=requestAnimationFrame(animate); }; animate(); },
+            initNoise() { const animate = () => { this.ctx.clearRect(0,0,this.width,this.height); this.ctx.fillStyle="rgba(255,255,255,0.15)"; for(let i=0; i<2000; i++) this.ctx.fillRect(Math.random()*this.width, Math.random()*this.height, Math.random()*2+1, Math.random()*2+1); if(Math.random()>0.9) this.canvas.style.transform=`translate(${Math.random()*2-1}px,${Math.random()*2-1}px)`; else this.canvas.style.transform='none'; this.animationId=requestAnimationFrame(animate); }; animate(); },
+            initSun() { let rot=0; const animate = () => { this.ctx.clearRect(0,0,this.width,this.height); const cx=this.width*0.8, cy=this.height*0.2; this.ctx.save(); this.ctx.translate(cx,cy); this.ctx.rotate(rot); this.ctx.fillStyle='rgba(255,255,255,0.1)'; for(let i=0;i<12;i++){this.ctx.rotate(Math.PI/6);this.ctx.beginPath();this.ctx.moveTo(0,0);this.ctx.lineTo(100,2000);this.ctx.lineTo(-100,2000);this.ctx.fill();} this.ctx.restore(); this.ctx.fillStyle='rgba(255,255,255,0.3)'; this.ctx.beginPath(); this.ctx.arc(cx,cy,60,0,Math.PI*2); this.ctx.fill(); rot+=0.002; this.animationId=requestAnimationFrame(animate); }; animate(); }
+        }; Visual.init();
+
+        window.Chat = {
+            setReply(id, content) { currentReply = { id, content }; document.getElementById('reply-indicator').style.display = 'flex'; document.getElementById('reply-text').innerText = `Đang trả lời #${id}`; },
+            cancelReply() { currentReply = null; document.getElementById('reply-indicator').style.display = 'none'; },
+            
+            // --- UPDATED: SEND + ADMIN TAG ---
+            send() { 
+                if(Security.checkBan()) return; 
+                const inp = document.getElementById('msg-input'); 
+                const mood = document.getElementById('mood-select').value; 
+                const txt = inp.value.trim(); 
+                if(!txt) return; 
+                if(!Security.checkSafe(txt)) { Security.punish(); alert("Ngôn từ vi phạm!"); return; } 
+                
+                push(ref(db, `posts/${currentTopic}`), { 
+                    content: txt, mood: mood, user_id: myID, timestamp: serverTimestamp(), replyTo: currentReply,
+                    isAdmin: window.Admin.isAdmin
+                }); 
+                inp.value = ""; 
+                document.getElementById('suggestion-box').style.display = 'none';
+                this.cancelReply(); 
+            },
+            openReportModal(key) { tempReportKey = key; document.getElementById('report-modal').style.display='flex'; },
+            closeReportModal() { document.getElementById('report-modal').style.display='none'; },
+            submitReport() { const r = document.getElementById('report-reason').value; if(!r) return alert("Nhập lý do!"); push(reportsRef, { key: tempReportKey, reason: r, reporter: myID, time: serverTimestamp() }); alert("Cảm ơn bạn đã giúp chúng tôi sàng lọc nội dung xấu!"); this.closeReportModal(); },
+            
+            // --- NEW: SUGGESTION CHECKER ---
+            checkSuggestion(val) {
+                const suggestion = KnowledgeBase.findMatch(val);
+                const box = document.getElementById('suggestion-box');
+                if(suggestion) {
+                    box.style.display = 'block';
+                    document.getElementById('suggest-answer').innerText = suggestion;
+                } else {
+                    box.style.display = 'none';
+                }
+            }
+        };
+
+        window.MusicApp = {
+            handleUpload(input) { if(input.files && input.files[0]) { const file = input.files[0]; const url = URL.createObjectURL(file); const audio = document.getElementById('local-audio-player'); document.getElementById('current-song-name').innerText = "🎵 " + file.name; audio.src = url; audio.play(); this.switchMode('local'); } },
+            switchMode(mode) { const localView = document.getElementById('view-local-music'); const iframe = document.getElementById('music-iframe'); const audio = document.getElementById('local-audio-player'); if (mode === 'local') { localView.style.display = 'block'; iframe.style.display = 'none'; iframe.src = ''; } else { localView.style.display = 'none'; iframe.style.display = 'block'; audio.pause(); iframe.src = 'https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M'; } }
+        };
+
+        window.Security = {
+            badWords: ["dm", "vl", "cc", "đụ", "lồn", "cặc", "chết", "tự tử", "lon", "concac"],
+            checkBan() { const ban = JSON.parse(localStorage.getItem('ban_data')) || {count:0, until:0}; const now = Date.now(); if(now < ban.until) { document.getElementById('ban-overlay').style.display = 'flex'; const left = Math.ceil((ban.until - now)/1000); document.getElementById('ban-timer').innerText = `${Math.floor(left/60)}:${(left%60).toString().padStart(2,'0')}`; setTimeout(() => this.checkBan(), 1000); return true; } document.getElementById('ban-overlay').style.display = 'none'; return false; },
+            checkSafe(txt) { let clean = txt.toLowerCase(); for(let w of this.badWords) if(clean.includes(w)) return false; return true; },
+            punish() { let ban = JSON.parse(localStorage.getItem('ban_data')) || {count:0, until:0}; ban.count++; ban.until = Date.now() + (ban.count * 60 * 1000); localStorage.setItem('ban_data', JSON.stringify(ban)); this.checkBan(); }
+        };
+
+        window.OS = {
+            zIndex: 100,
+            open(id) { const w=document.getElementById(id); w.style.display='flex'; w.style.zIndex=++this.zIndex; },
+            close(id) { document.getElementById(id).style.display='none'; },
+            drag(e, id) { const el = document.getElementById(id); el.style.zIndex = ++this.zIndex; let shiftX = e.clientX - el.getBoundingClientRect().left; let shiftY = e.clientY - el.getBoundingClientRect().top; const move = (ev) => { el.style.left = ev.pageX - shiftX + 'px'; el.style.top = ev.pageY - shiftY + 'px'; }; document.addEventListener('mousemove', move); document.onmouseup = () => document.removeEventListener('mousemove', move); },
+            goBackToTopics() { document.getElementById('desktop-env').style.display = 'none'; document.getElementById('topics-screen').style.display = 'flex'; }
+        };
+
+        window.Calm = {
+            interval: null, treeScale: 0.2, isDrawing: false,
+            setMode(mode, btn) {
+                const views = ['breath', 'bubble', 'mogo', 'pop', 'draw', 'star', 'scream'];
+                views.forEach(v => document.getElementById('view-'+v).style.display = 'none');
+                document.getElementById('view-'+mode).style.display = mode === 'breath' || mode === 'scream' ? 'flex' : (mode==='draw'?'flex':'block');
+                document.querySelectorAll('.calm-tab').forEach(t => t.classList.remove('active'));
+                if(btn) btn.classList.add('active');
+                clearInterval(this.interval);
+                const ctx = document.getElementById('zen-canvas').getContext('2d');
+                if(mode==='bubble') { this.interval = setInterval(() => { const b = document.createElement('div'); b.className = 'bubble'; b.style.left = Math.random()*90+'%'; b.style.backgroundColor = `hsla(${Math.random()*360},70%,70%,0.5)`; b.onclick = function(){Sound.play('pop'); this.remove()}; document.getElementById('view-bubble').appendChild(b); setTimeout(()=>b.remove(), 5000); }, 800); }
+                if(mode==='pop') { const g = document.getElementById('pop-grid'); g.innerHTML = ''; for(let i=0; i<36; i++) { const p = document.createElement('div'); p.className = 'pop-item'; p.onclick = function() { if(!this.classList.contains('popped')) { this.classList.add('popped'); Sound.play('pop'); } }; g.appendChild(p); } }
+                if(mode==='draw') this.setupCanvas();
+            },
+            hitMogo(e) { Sound.play('mogo'); Karma.update(1); const t = document.createElement('div'); t.innerText = "Công đức +1"; t.className = "merit-text"; t.style.left = e.clientX + 'px'; t.style.top = e.clientY + 'px'; document.body.appendChild(t); setTimeout(()=>t.remove(), 1000); },
+            createStar(e) { const s = document.createElement('div'); s.className = 'star'; s.style.left = e.offsetX + 'px'; s.style.top = e.offsetY + 'px'; e.target.appendChild(s); Karma.update(1); },
+            setupCanvas() { const c = document.getElementById('zen-canvas'); const ctx = c.getContext('2d'); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = '#333'; c.onmousedown = (e) => { this.isDrawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); }; c.onmousemove = (e) => { if(this.isDrawing) { ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } }; c.onmouseup = () => this.isDrawing = false; },
+            clearCanvas() { const c = document.getElementById('zen-canvas'); c.getContext('2d').clearRect(0,0,c.width,c.height); }
+        };
+
+        window.Notif = {
+            toggle() { const d = document.getElementById('notif-list'); d.style.display = d.style.display==='block'?'none':'block'; document.getElementById('notif-badge').style.display='none'; },
+            add(data, key) { const d = document.getElementById('notif-list'); if(d.innerText.includes('Chưa')) d.innerHTML = ''; const div = document.createElement('div'); div.className = 'notif-item'; div.innerHTML = `<div class="notif-avatar">💬</div><div><b>#${data.user_id}</b> trả lời</div>`; div.onclick = () => { OS.open('win-chat'); document.getElementById(key).scrollIntoView(); }; d.prepend(div); document.getElementById('notif-badge').style.display = 'flex'; }
+        };
+
+        let tempImg = ''; let adminClicks=0;
+        window.Admin = {
+            isAdmin: false,
+            triggerLogin() { 
+                adminClicks++; 
+                if(adminClicks===5){ 
+                    if(prompt("Nhập mật khẩu Admin:")==="admin123") { 
+                        this.isAdmin = true; 
+                        alert("👑 Chào mừng Admin! Tin nhắn của bạn sẽ có màu Vàng và bạn có quyền Ghim/Lưu mẫu.");
+                        OS.open('win-admin'); 
+                        if(document.getElementById('topics-screen').style.display !== 'none') { 
+                            document.getElementById('topics-screen').style.display = 'none'; 
+                            document.getElementById('desktop-env').style.display = 'block'; 
+                        } 
+                        document.getElementById('unpin-btn').style.display = 'block';
+                    } 
+                    adminClicks=0; 
+                } 
+            },
+            
+            // --- NEW: ADMIN ACTIONS ---
+            pinMessage(content) {
+                if(!this.isAdmin) return;
+                if(confirm("📌 Bạn muốn ghim tin nhắn này lên đầu phòng chat?")) {
+                    set(ref(db, `pinned/${currentTopic}`), {
+                        content: content,
+                        admin: myID,
+                        time: Date.now()
+                    });
+                }
+            },
+            unpin() {
+                if(confirm("Gỡ ghim tin nhắn này?")) {
+                    remove(ref(db, `pinned/${currentTopic}`));
+                }
+            },
+            saveSample(answerContent) {
+                if(!this.isAdmin) return;
+                const triggerQuestion = prompt("💡 DẠY HỆ THỐNG:\n\nNgười dùng hỏi câu gì thì sẽ hiện câu trả lời này?", "Làm sao để hết buồn?");
+                if(triggerQuestion) {
+                    push(kbRef, {
+                        question: triggerQuestion.toLowerCase(), 
+                        answer: answerContent
+                    });
+                    alert("✅ Đã lưu vào Kho Tri Thức! Từ giờ ai hỏi câu tương tự hệ thống sẽ tự gợi ý.");
+                    KnowledgeBase.init();
+                }
+            },
+
+            resetMyBan() { localStorage.removeItem('ban_data'); Security.checkBan(); alert("Done"); },
+            handleImage(input) { if (input.files && input.files[0]) { const reader = new FileReader(); reader.onload = (e) => { tempImg = e.target.result; document.getElementById('img-status').style.display = 'block'; }; reader.readAsDataURL(input.files[0]); } },
+            addTopic() { const nameInp = document.getElementById('new-topic-name'); const name = nameInp.value.trim(); if(!name || !tempImg) return alert("❌ Vui lòng nhập tên và chọn ảnh!"); push(topicsRef, { name: name, img: tempImg }); alert("✅ Đã thêm chủ đề thành công!"); nameInp.value = ''; tempImg = ''; document.getElementById('new-topic-img').value = ''; document.getElementById('img-status').style.display = 'none'; },
+            startRadio() {
+                const link = document.getElementById('radio-link').value;
+                if(!link) return alert("Nhập link YouTube!");
+                let videoId = link.split('v=')[1];
+                if(!videoId && link.includes('youtu.be/')) videoId = link.split('youtu.be/')[1];
+                const ampPos = videoId.indexOf('&'); if(ampPos != -1) videoId = videoId.substring(0, ampPos);
+                
+                push(radioRef, { status: 'live', videoId: videoId, startTime: Date.now() });
+                alert("Đã bắt đầu phát sóng!");
+            }
+        };
+
+        onChildAdded(bottlesRef, (snap) => {
+            const data = snap.val();
+            const b = document.createElement('div'); b.className = 'bottle'; b.innerHTML = '🍾'; b.style.top = Math.random() * 80 + '%'; b.onclick = () => alert(`🍾 Lời nhắn từ biển:\n\n"${data.msg}"\n- Người lạ #${data.user}`); document.getElementById('desktop-env').appendChild(b); setTimeout(() => b.remove(), 20000);
+        });
+
+        onChildAdded(reportsRef, (snap) => {
+            const d = snap.val();
+            const div = document.createElement('div'); div.className='report-item'; div.innerHTML = `<b>Lý do:</b> ${d.reason} <br><small style="color:red">Reporter: ${d.reporter}</small>`; document.getElementById('report-list').prepend(div);
+        });
+
+        onChildRemoved(postsRef, (snap) => { const el = document.getElementById(snap.key); if(el) el.remove(); });
+
+        // INIT
+        Topics.init();
+        setRealtimeBG();
+        Radio.init();
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('clock-display').innerText = now.toLocaleTimeString('vi-VN');
+            document.getElementById('date-display').innerText = now.toLocaleDateString('vi-VN');
+            document.getElementById('online-num').innerText = Math.floor(Math.random() * 10) + 5;
+            Security.checkBan();
+        }, 1000);
+
+    </script>
+</body>
+</html>
